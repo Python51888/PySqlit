@@ -1,4 +1,4 @@
-![输入图片说明](Logo.png)
+![输入图片说明](logo/Logo.png)
 # PySQLit - 增强版SQLite数据库引擎
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
