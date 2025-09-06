@@ -13,8 +13,8 @@ if platform.system() != 'Windows':
     import fcntl
 import tempfile
 from typing import Optional, BinaryIO
-from .exceptions import DatabaseError
-
+from .exceptions import DatabaseError, StorageError
+from .storage import Pager
 
 class FileLock:
     """跨平台文件锁定实现。
@@ -98,25 +98,30 @@ class FileLock:
             timeout: 超时时间
             
         Returns:
-            成功获取锁返回True，超时返回False
+            成功获取锁返回True，失败返回False
         """
         import fcntl
         lock_type = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
         
         if timeout is None:
             # 无限等待
-            fcntl.flock(self.lock_file.fileno(), lock_type)
-            self._locked = True
-            return True
+            if self.lock_file is not None and not self.lock_file.closed:
+                fcntl.flock(self.lock_file.fileno(), lock_type)
+                self._locked = True
+                return True
+            return False
         else:
             # 带超时的非阻塞尝试
             import time
             start_time = time.time()
             while time.time() - start_time < timeout:
                 try:
-                    fcntl.flock(self.lock_file.fileno(), lock_type | fcntl.LOCK_NB)
-                    self._locked = True
-                    return True
+                    if self.lock_file is not None and not self.lock_file.closed:
+                        fcntl.flock(self.lock_file.fileno(), lock_type | fcntl.LOCK_NB)
+                        self._locked = True
+                        return True
+                    else:
+                        return False
                 except BlockingIOError:
                     time.sleep(0.1)
             return False
@@ -178,7 +183,7 @@ class FileLock:
         self.release()
 
 
-class ConcurrentPager:
+class ConcurrentPager(Pager):
     """线程安全和进程安全的页面管理器，支持文件锁定。
     
     提供跨平台的页面管理功能，确保在多线程和多进程环境下的
@@ -191,30 +196,51 @@ class ConcurrentPager:
         Args:
             filename: 数据库文件名，":memory:"表示内存数据库
         """
-        self.filename = filename
-        self.file: Optional[BinaryIO] = None
+        self.is_memory_db = (filename == ":memory:")
+        
+        # 对于内存数据库，我们仍然需要初始化父类，但要特殊处理文件操作
+        if self.is_memory_db:
+            # 手动设置父类属性
+            self.filename = filename
+            self.file_descriptor = None
+            self.file_length = 0
+            self.num_pages = 0
+            self.pages = [None] * 100  # 使用默认大小
+        else:
+            # 初始化父类Pager
+            super().__init__(filename)
+        
         self.file_lock = FileLock(filename)  # 文件锁
         from .constants import PAGE_SIZE
         self.page_size = PAGE_SIZE
         self.page_cache = {}  # 简单的内存缓存
         self.cache_lock = threading.RLock()  # 缓存访问锁
-        self.is_memory_db = (filename == ":memory:")
         if not self.is_memory_db:
-            self._open_file()
-        
-    def _open_file(self):
-        """打开数据库文件。"""
+            self._open_file_concurrent()
+    
+    def _open_file_concurrent(self):
+        """打开数据库文件（并发版本）。"""
         if self.is_memory_db:
             return
             
         if not os.path.exists(self.filename):
             # 创建新文件
-            self.file = open(self.filename, 'wb+')
-            self.file.write(b'\x00' * self.page_size)  # 写入初始页面
-            self.file.flush()
+            self.file_descriptor = open(self.filename, 'wb+')
+            self.file_descriptor.write(b'\x00' * self.page_size)  # 写入初始页面
+            self.file_descriptor.flush()
+            self.file_length = self.page_size
+            # 直接设置父类的num_pages属性
+            super().__setattr__('num_pages', 1)
         else:
-            self.file = open(self.filename, 'rb+')
+            self.file_descriptor = open(self.filename, 'rb+')
+            self.file_descriptor.seek(0, 2)  # 移动到文件末尾
+            self.file_length = self.file_descriptor.tell()
+            # 直接设置父类的num_pages属性
+            super().__setattr__('num_pages', self.file_length // self.page_size)
             
+            if self.file_length % self.page_size != 0:
+                raise StorageError("Database file is not a whole number of pages")
+    
     def get_page(self, page_num: int) -> bytearray:
         """线程安全地获取页面。
         
@@ -238,14 +264,8 @@ class ConcurrentPager:
         # 获取共享锁用于读取
         self.file_lock.acquire_shared()
         try:
-            self.file.seek(page_num * self.page_size)
-            data = self.file.read(self.page_size)
-            
-            if len(data) < self.page_size:
-                # 如果页面不完整，用零填充
-                data = data.ljust(self.page_size, b'\x00')
-                
-            page = bytearray(data)
+            # 调用父类方法获取页面
+            page = super().get_page(page_num)
             
             # 缓存页面
             with self.cache_lock:
@@ -255,7 +275,7 @@ class ConcurrentPager:
             
         finally:
             self.file_lock.release()
-            
+    
     def write_page(self, page_num: int, data: bytes):
         """线程安全地写入页面。
         
@@ -280,9 +300,8 @@ class ConcurrentPager:
         # 获取独占锁用于写入
         self.file_lock.acquire_exclusive()
         try:
-            self.file.seek(page_num * self.page_size)
-            self.file.write(data)
-            self.file.flush()
+            # 调用父类方法写入页面
+            super().flush_page(page_num)
             
             # 更新缓存
             with self.cache_lock:
@@ -290,24 +309,7 @@ class ConcurrentPager:
                 
         finally:
             self.file_lock.release()
-            
-    @property
-    def num_pages(self) -> int:
-        """获取文件中的页面数量。"""
-        if self.is_memory_db:
-            # 内存数据库：从缓存中获取最大页号
-            if not self.page_cache:
-                return 0
-            return max(self.page_cache.keys()) + 1
-            
-        self.file_lock.acquire_shared()
-        try:
-            self.file.seek(0, 2)  # 移动到文件末尾
-            file_size = self.file.tell()
-            return file_size // self.page_size
-        finally:
-            self.file_lock.release()
-            
+    
     def flush(self):
         """将所有更改刷新到磁盘。"""
         if self.is_memory_db:
@@ -315,22 +317,24 @@ class ConcurrentPager:
             
         self.file_lock.acquire_exclusive()
         try:
-            self.file.flush()
-            os.fsync(self.file.fileno())  # 强制同步到磁盘
+            # 调用父类方法刷新所有页面
+            super().flush_all_pages()
         finally:
             self.file_lock.release()
-            
+    
     def close(self):
         """关闭文件。"""
-        if self.file and not self.file.closed:
-            self.flush()  # 关闭前确保所有更改已刷新
-            self.file_lock.release()
-            self.file.close()
+        self.file_lock.acquire_exclusive()
+        try:
+            # 调用父类方法关闭
+            super().close()
             
-        # 清除内存数据库的缓存
-        if self.is_memory_db:
-            with self.cache_lock:
-                self.page_cache.clear()
+            # 清除内存数据库的缓存
+            if self.is_memory_db:
+                with self.cache_lock:
+                    self.page_cache.clear()
+        finally:
+            self.file_lock.release()
             
     def create_backup(self, backup_path: str):
         """创建数据库文件的备份。
@@ -340,9 +344,10 @@ class ConcurrentPager:
         """
         self.file_lock.acquire_shared()
         try:
-            self.file.flush()
-            import shutil
-            shutil.copy2(self.filename, backup_path)
+            if self.file_descriptor is not None:
+                self.file_descriptor.flush()
+                import shutil
+                shutil.copy2(self.filename, backup_path)
         finally:
             self.file_lock.release()
             
@@ -354,11 +359,14 @@ class ConcurrentPager:
         """
         self.file_lock.acquire_shared()
         try:
-            self.file.seek(0, 2)
-            return self.file.tell()
+            if self.file_descriptor is not None:
+                self.file_descriptor.seek(0, 2)
+                return self.file_descriptor.tell()
+            else:
+                return 0
         finally:
             self.file_lock.release()
-            
+    
     def truncate(self, new_size: int):
         """截断文件到指定大小。
         
@@ -367,14 +375,15 @@ class ConcurrentPager:
         """
         self.file_lock.acquire_exclusive()
         try:
-            self.file.truncate(new_size)
-            # 清除被截断页面的缓存
-            with self.cache_lock:
-                pages_to_remove = [
-                    page_num for page_num in self.page_cache
-                    if page_num * self.page_size >= new_size
-                ]
-                for page_num in pages_to_remove:
-                    del self.page_cache[page_num]
+            if self.file_descriptor is not None:
+                self.file_descriptor.truncate(new_size)
+                # 清除被截断页面的缓存
+                with self.cache_lock:
+                    pages_to_remove = [
+                        page_num for page_num in self.page_cache
+                        if page_num * self.page_size >= new_size
+                    ]
+                    for page_num in pages_to_remove:
+                        del self.page_cache[page_num]
         finally:
             self.file_lock.release()
