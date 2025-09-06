@@ -6,7 +6,13 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "black>=22.0",
+    "fastmcp>=2.12.2",
     "mypy>=1.0",
     "pytest>=7.0",
     "pytest-cov>=4.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "Mypro",
 ]

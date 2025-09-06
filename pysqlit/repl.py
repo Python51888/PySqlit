@@ -94,14 +94,15 @@ class EnhancedREPL:
             
         self.databases: Dict[str, EnhancedDatabase] = {}
         self.current_database_name: str = "main"
-        self.current_database: EnhancedDatabase = None
+        self.current_database: Optional[EnhancedDatabase] = None
         self.active_database: Optional[str] = None  # 跟踪当前使用的数据库
         
         # 初始化默认数据库
         self._initialize_database(database_file)
         
-        self.executor: SQLExecutor = None
-        self.transaction_manager: TransactionManager = None
+        # 注意：不要在这里重新设置为None，因为_initialize_database已经正确设置了这些属性
+        # self.executor: SQLExecutor = None
+        # self.transaction_manager: TransactionManager = None
         self.current_transaction: Optional[int] = None
         self.input_buffer = EnhancedInputBuffer()
         
@@ -318,6 +319,8 @@ class EnhancedREPL:
                     print("查询成功。")
                 else:
                     print("Query OK.")
+            elif result.value == 4:  # TABLE_NOT_FOUND
+                print("错误: 表不存在")
             else:
                 print(f"错误: {data}")
                 
@@ -331,6 +334,10 @@ class EnhancedREPL:
                 print(f"错误: {error_msg}")
             elif "UPDATE" in statement.upper() and "WHERE" not in statement.upper():
                 print("警告: UPDATE语句没有WHERE子句将影响所有行")
+                print(f"错误: {error_msg}")
+            elif "表" in error_msg and "不存在" in error_msg:
+                print(f"错误: {error_msg}")
+            elif "无法删除包含数据的表" in error_msg:
                 print(f"错误: {error_msg}")
             else:
                 print(f"错误: {error_msg}")
@@ -348,12 +355,17 @@ class EnhancedREPL:
             return []
         
         # 尝试从第一行获取列名
-        if hasattr(rows[0], 'data') and rows[0].data:
-            return list(rows[0].data.keys())
-        else:
-            # 如果没有数据结构，回退到通用列名
-            return ['id', 'name']  # 通用回退
-    
+        first_row = rows[0]
+        # 使用getattr安全地访问data属性
+        row_data = getattr(first_row, 'data', None)
+        if row_data is not None:
+            # 确保row_data是字典类型
+            if isinstance(row_data, dict):
+                return list(row_data.keys())
+        
+        # 如果没有数据结构，回退到通用列名
+        return ['id', 'name']  # 通用回退
+
     def print_select_results_with_columns(self, rows: List[Any], columns: List[str]):
         """以表格形式打印SELECT查询结果。
         
@@ -375,10 +387,14 @@ class EnhancedREPL:
             values = []
             for col in columns:
                 # 处理Row对象和字典对象
-                if hasattr(row, 'data') and row.data:
+                value = 'NULL'
+                # 使用getattr安全地访问data属性
+                row_data = getattr(row, 'data', None)
+                if row_data is not None:
                     # Row对象包含数据字典
-                    val = row.data.get(col)
-                    value = 'NULL' if val is None else str(val)
+                    if isinstance(row_data, dict) and col in row_data:
+                        val = row_data.get(col)
+                        value = 'NULL' if val is None else str(val)
                 elif isinstance(row, dict):
                     # 字典对象（来自execute_select）
                     val = row.get(col)
@@ -466,6 +482,10 @@ DROP TABLE animal
             print("未选择任何数据库。请使用 'USE 数据库名' 命令选择数据库。")
             return
             
+        if self.current_database is None:
+            print("数据库未初始化。")
+            return
+            
         tables = self.current_database.list_tables()
         if tables:
             print("Tables:")
@@ -476,12 +496,16 @@ DROP TABLE animal
                     print(f"  {table} ({columns})")
         else:
             print("未找到任何表。")
-    
+
     def print_schema(self) -> None:
         """打印表结构信息。
         
         显示当前数据库中所有表的详细结构，包括列名、数据类型、约束等。
         """
+        if self.current_database is None:
+            print("数据库未初始化。")
+            return
+            
         tables = self.current_database.list_tables()
         for table in tables:
             schema = self.current_database.get_table_schema(table)
@@ -492,7 +516,7 @@ DROP TABLE animal
                     primary = " PRIMARY KEY" if col_def.is_primary else ""
                     nullable = " NOT NULL" if not col_def.is_nullable else ""
                     print(f"  {col_name} {col_def.data_type.value}{primary}{nullable}")
-    
+
     def print_databases(self) -> None:
         """打印所有可用数据库。
         
@@ -516,17 +540,25 @@ DROP TABLE animal
         
         为当前数据库创建备份文件，包含时间戳信息。
         """
+        if self.current_database is None:
+            print("数据库未初始化。")
+            return
+            
         try:
             backup_path = self.current_database.create_backup()
             print(f"备份已创建: {backup_path}")
         except Exception as e:
             print(f"备份失败: {e}")
-    
+
     def list_backups(self):
         """列出可用备份。
         
         显示当前数据库的所有备份文件及其详细信息。
         """
+        if self.current_database is None:
+            print("数据库未初始化。")
+            return
+            
         try:
             backups = self.current_database.list_backups()
             if backups:
@@ -587,6 +619,10 @@ DROP TABLE animal
         
         显示当前数据库的详细信息，包括文件大小、表数量、活动事务等。
         """
+        if self.current_database is None:
+            print("数据库未初始化。")
+            return
+            
         info = self.current_database.get_database_info()
         print("\n数据库状态:")
         print(f"  当前数据库: {self.current_database_name}")

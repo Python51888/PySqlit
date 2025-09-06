@@ -99,9 +99,9 @@ class TestEnhancedDatabase:
         result = database.drop_table("test")
         assert result is True
         assert "test" not in database.tables
-        
+    
     def test_drop_table_with_data(self, database):
-        """Test dropping table with existing data."""
+        """Test that dropping table with existing data should fail."""
         # Create table and insert data
         database.create_table("test", {"id": "INTEGER"})
         table = database.tables["test"]
@@ -110,10 +110,16 @@ class TestEnhancedDatabase:
         # Verify data exists
         assert table.get_row_count() == 1
         
-        # Drop table
-        result = database.drop_table("test")
-        assert result is True
-        assert "test" not in database.tables
+        # Try to drop table with data, should fail
+        from pysqlit.exceptions import DatabaseError
+        with pytest.raises(DatabaseError, match="无法删除包含数据的表"):
+            database.drop_table("test")
+        
+        # Verify table still exists
+        assert "test" in database.tables
+        
+        # Verify data still exists
+        assert table.get_row_count() == 1
     
     def test_drop_nonexistent_table(self, database):
         """Test dropping non-existent table raises error."""
@@ -121,7 +127,7 @@ class TestEnhancedDatabase:
             database.drop_table("nonexistent")
             
     def test_truncate_before_drop(self, database):
-        """Test that table data is truncated before drop."""
+        """Test that table data must be deleted before drop."""
         # Create table and insert data
         database.create_table("test", {"id": "INTEGER"})
         table = database.tables["test"]
@@ -133,7 +139,25 @@ class TestEnhancedDatabase:
         # Verify data exists
         assert table.get_row_count() == 5
         
-        # Drop table
+        # Try to drop table with data, should fail
+        from pysqlit.exceptions import DatabaseError
+        with pytest.raises(DatabaseError, match="无法删除包含数据的表"):
+            database.drop_table("test")
+        
+        # Verify table still exists
+        assert "test" in database.tables
+        
+        # Verify data still exists
+        assert table.get_row_count() == 5
+        
+        # Delete all data first
+        deleted_count = table.delete_rows()
+        assert deleted_count == 5
+        
+        # Verify table is now empty
+        assert table.get_row_count() == 0
+        
+        # Now drop the empty table, should succeed
         result = database.drop_table("test")
         assert result is True
         

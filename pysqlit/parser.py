@@ -70,8 +70,8 @@ class WhereCondition:
             value: 比较值
         """
         self.column = column
-        # 规范化操作符
-        self.operator = operator.replace('_', ' ')  # 将IS_NULL还原为IS NULL
+        # 规范化操作符，但保留原始格式以避免混淆
+        self.operator = operator
         self.value = value
         
     def __repr__(self):
@@ -120,23 +120,61 @@ class WhereCondition:
             return False
         
         # 处理LIKE操作符 - 不区分大小写的模糊匹配
-        if self.operator == "LIKE":
+        if self.operator.upper() == "LIKE":
             pattern = str(self.value).lower()
             text = str(row_value).lower()
             return pattern in text
         
         # 类型转换和比较 - 确保类型安全
+        # 初始化变量以确保在所有代码路径中都已定义
+        original_self_value = self.value
+        
         try:
+            # 保存原始值用于错误处理
+            original_row_value = row_value
+            
             # 尝试将两个值都转换为数值类型进行比较
-            try:
-                row_float = float(row_value)
-                value_float = float(self.value)
-                row_value = row_float
-                self.value = value_float
-            except (ValueError, TypeError):
-                # 无法转换为数值时，按字符串处理
+            row_numeric = None
+            self_numeric = None
+            
+            # 转换行值为数值
+            if isinstance(row_value, (int, float)):
+                row_numeric = float(row_value)
+            elif isinstance(row_value, str):
+                try:
+                    row_numeric = float(row_value)
+                except ValueError:
+                    pass  # 保持为None，后续按字符串处理
+            
+            # 转换比较值为数值
+            if isinstance(self.value, (int, float)):
+                self_numeric = float(self.value)
+            elif isinstance(self.value, str):
+                try:
+                    self_numeric = float(self.value)
+                except ValueError:
+                    pass  # 保持为None，后续按字符串处理
+            
+            # 如果两个值都能转换为数值，则按数值比较
+            if row_numeric is not None and self_numeric is not None:
+                row_value = row_numeric
+                self.value = self_numeric
+            # 如果其中一个值是数值，另一个是字符串，则按字符串处理
+            # 但只在操作符不是比较运算符时才这样做
+            elif self.operator in ["=", "!="]:
+                # 对于相等性比较，按字符串处理是可以接受的
                 row_value = str(row_value)
                 self.value = str(self.value)
+            else:
+                # 对于比较运算符（>, <, >=, <=），如果类型不匹配则返回False
+                # 或者抛出异常，因为我们不能合理地比较不兼容的类型
+                if (row_numeric is not None) != (self_numeric is not None):
+                    # 一个能转为数值，另一个不能，无法比较
+                    return False
+                elif row_numeric is None and self_numeric is None:
+                    # 两个都不能转为数值，对于比较运算符，尝试字符串比较
+                    row_value = str(row_value)
+                    self.value = str(self.value)
             
             # 根据操作符执行相应的比较
             if self.operator == "=":
@@ -155,6 +193,8 @@ class WhereCondition:
                 return False
         except (TypeError, ValueError):
             # 类型转换失败时返回False
+            # 恢复原始值以便调试
+            self.value = original_self_value
             return False
 
 
@@ -782,6 +822,10 @@ class EnhancedSQLParser:
                         except ValueError as e:
                             return PrepareResult.SYNTAX_ERROR, str(e)
                     
+                    # 提取表名（UPDATE关键字后的第一个单词）
+                    update_pos = input_buffer.upper().find('UPDATE')
+                    table_name = input_buffer[update_pos + 6:set_start].strip()
+                    
                     return PrepareResult.SUCCESS, UpdateStatement(table_name, updates, where_clause)
                 except ValueError as e:
                     return PrepareResult.SYNTAX_ERROR, str(e)
@@ -1038,21 +1082,67 @@ class EnhancedSQLParser:
             for op in operators:
                 if op in where_str:
                     column, value = where_str.split(op, 1)
-                    return WhereCondition(column.strip(), op, EnhancedSQLParser._parse_value(value.strip()))
+                    return WhereCondition(column.strip(), op.strip(), EnhancedSQLParser._parse_value(value.strip()))
             raise ValueError(f"Invalid WHERE condition: {where_str}")
         
         column = match.group(1)
-        operator = match.group(2).replace(' ', '_')  # Normalize to 'IS_NULL' or 'IS_NOT_NULL'
+        operator = match.group(2)  # 保持原始操作符格式
         value_str = match.group(3).strip()
         
         # Handle NULL conditions
-        if operator in ['IS_NULL', 'IS_NOT_NULL']:
-            return WhereCondition(column, operator, None)
+        if operator.upper() == 'IS NULL':
+            return WhereCondition(column, 'IS NULL', None)
+        elif operator.upper() == 'IS NOT NULL':
+            return WhereCondition(column, 'IS NOT NULL', None)
         
         # Parse value based on type
         value = EnhancedSQLParser._parse_value(value_str)
         return WhereCondition(column, operator, value)
     
+    @staticmethod
+    def _split_assignments(set_str: str) -> List[str]:
+        """分割SET子句中的赋值表达式。
+        
+        Args:
+            set_str: SET子句字符串
+            
+        Returns:
+            赋值表达式列表
+        """
+        assignments = []
+        current_assignment = ""
+        in_quotes = False
+        quote_char = None
+        paren_count = 0
+        
+        for char in set_str:
+            if char in ["'", '"'] and not in_quotes:
+                in_quotes = True
+                quote_char = char
+                current_assignment += char
+            elif char == quote_char and in_quotes:
+                in_quotes = False
+                quote_char = None
+                current_assignment += char
+            elif char == '(' and not in_quotes:
+                paren_count += 1
+                current_assignment += char
+            elif char == ')' and not in_quotes:
+                paren_count -= 1
+                current_assignment += char
+            elif char == ',' and not in_quotes and paren_count == 0:
+                # 赋值表达式分隔符
+                assignments.append(current_assignment.strip())
+                current_assignment = ""
+            else:
+                current_assignment += char
+        
+        # 添加最后一个赋值表达式
+        if current_assignment.strip():
+            assignments.append(current_assignment.strip())
+        
+        return assignments
+
     @staticmethod
     def _parse_value(value_str: str) -> Any:
         """根据类型解析值。
@@ -1080,7 +1170,7 @@ class EnhancedSQLParser:
             is_quoted = True
         
         # Handle NULL
-        if value_str.lower() == 'null':
+        if value_str.upper() == 'NULL':
             return None
         
         # Try integer - only attempt if quoted or contains only digits
@@ -1098,9 +1188,9 @@ class EnhancedSQLParser:
                 pass
         
         # Try boolean
-        if value_str.lower() in ['true', 't', '1']:
+        if value_str.upper() in ['TRUE', 'T', '1']:
             return True
-        elif value_str.lower() in ['false', 'f', '0']:
+        elif value_str.upper() in ['FALSE', 'F', '0']:
             return False
         
         # Return as string
