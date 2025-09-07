@@ -40,11 +40,14 @@ pip install -r requirements.txt
 
 ### 基础使用
 
-```python
+``python
 from pysqlit.database import EnhancedDatabase
+import os
 
 # 创建数据库连接
-db = EnhancedDatabase("myapp.db")
+# 确保使用绝对路径以保证日志文件在正确的目录中创建
+db_file = os.path.abspath("chao.db")
+db = EnhancedDatabase(db_file)
 
 # 创建表
 db.execute("""
@@ -77,6 +80,135 @@ backup_path = db.create_backup("daily_backup")
 print(f"Backup created: {backup_path}")
 
 db.close()
+```
+
+### 简化版接口
+
+对于需要更简单API的用户，PySQLit还提供了简化版接口：
+
+```python
+from pysqlit.simple import SimpleDatabase
+
+# 使用上下文管理器创建数据库连接
+with SimpleDatabase("example.db") as db:
+    # 创建表
+    db.create_table(
+        table_name="users",
+        columns={
+            "id": "INTEGER",
+            "name": "TEXT",
+            "email": "TEXT",
+            "age": "INTEGER"
+        },
+        primary_key="id",
+        unique_columns=["email"],
+        not_null_columns=["name"]
+    )
+    
+    # 插入数据
+    db.insert("users", {"id": 1, "name": "张三", "email": "zhangsan@example.com", "age": 25})
+    
+    # 查询数据
+    users = db.select("users")
+    for user in users:
+        print(user)
+    
+    # 更新数据
+    db.update("users", {"age": 26}, where="id = 1")
+    
+    # 删除数据
+    db.delete("users", where="id = 1")
+```
+
+### 数据文件操作接口
+
+对于需要更强大功能的用户，PySQLit提供了数据文件操作接口，支持完整的数据库操作：
+
+```python
+from pysqlit.datafile import DataFile
+
+# 使用上下文管理器创建数据文件操作对象
+with DataFile("example.db") as df:
+    # 创建表
+    df.create_table(
+        table_name="users",
+        columns={
+            "id": "INTEGER",
+            "name": "TEXT",
+            "email": "TEXT",
+            "age": "INTEGER"
+        },
+        primary_key="id",
+        unique_columns=["email"],
+        not_null_columns=["name"]
+    )
+    
+    # 插入数据
+    df.insert("users", {"id": 1, "name": "张三", "email": "zhangsan@example.com", "age": 25})
+    
+    # 查询数据
+    users = df.select("users")
+    for user in users:
+        print(user)
+    
+    # 更新数据
+    df.update("users", {"age": 26}, where="id = 1")
+    
+    # 删除数据
+    df.delete("users", where="id = 1")
+    
+    # 导入JSON数据
+    df.import_from_json("users", "data.json")
+    
+    # 导出CSV数据
+    df.export_to_csv("users", "data.csv")
+```
+
+### 增强版数据文件操作接口
+
+对于需要更高级功能的用户，PySQLit还提供了增强版数据文件操作接口，支持更多高级数据库操作：
+
+```python
+from pysqlit.enhanced_datafile import EnhancedDataFile
+
+# 使用上下文管理器创建增强版数据文件操作对象
+with EnhancedDataFile("example.db") as edf:
+    # 创建表
+    edf.create_table(
+        table_name="users",
+        columns={
+            "id": "INTEGER",
+            "name": "TEXT",
+            "email": "TEXT",
+            "age": "INTEGER"
+        },
+        primary_key="id",
+        unique_columns=["email"],
+        not_null_columns=["name"]
+    )
+    
+    # 批量插入数据
+    batch_data = [
+        {"id": 1, "name": "张三", "email": "zhangsan@example.com", "age": 25},
+        {"id": 2, "name": "李四", "email": "lisi@example.com", "age": 30}
+    ]
+    edf.batch_insert("users", batch_data)
+    
+    # 多表连接查询
+    joined_data = edf.select_with_join(
+        tables=["users", "departments"],
+        columns=["users.name", "departments.name as department"],
+        join_conditions=["INNER JOIN departments ON users.department_id = departments.id"]
+    )
+    
+    # 导入XML数据
+    edf.import_from_xml("users", "data.xml")
+    
+    # 导出XML数据
+    edf.export_to_xml("users", "data.xml")
+    
+    # 创建索引
+    edf.create_index("users", "idx_users_age", ["age"])
 ```
 
 ## 🏗️ 架构概览

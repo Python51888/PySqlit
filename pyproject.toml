@@ -1,6 +1,6 @@
 [project]
 name = "pysqlit"
-version = "0.1.0"
+version = "0.2.1"
 description = "Python版sqlite"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,7 +12,5 @@ dependencies = [
     "pytest-cov>=4.0",
 ]
 
-[tool.uv.workspace]
-members = [
-    "Mypro",
-]
+[tool.setuptools.packages.find]
+include = ["pysqlit*"]
