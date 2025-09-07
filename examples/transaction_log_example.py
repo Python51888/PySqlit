@@ -19,7 +19,9 @@ def main():
     
     # 初始化数据库
     print(f"初始化数据库: {db_file}")
-    db = EnhancedDatabase(db_file)
+    # 确保文件路径是绝对路径，以保证日志文件在正确的目录中创建
+    abs_db_file = os.path.abspath(db_file)
+    db = EnhancedDatabase(abs_db_file)
     
     try:
         # 创建表（如果不存在）

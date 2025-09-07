@@ -515,7 +515,7 @@ class EnhancedDatabase:
                 for table_name, schema_dict in schema_data.items():
                     schema = TableSchema.from_dict(schema_dict)
                     self.schemas[table_name] = schema
-                    self.tables[table_name] = EnhancedTable(self.pager, table_name, schema)
+                    self.tables[table_name] = EnhancedTable(self.pager, table_name, schema, self)
                         
             except Exception as e:
                 print(f"警告: 加载模式失败: {e}")
@@ -943,7 +943,7 @@ class SQLExecutor:
         
         return PrepareResult(0), inserted_count  # SUCCESS = 0
     
-    def _execute_select(self, statement: SelectStatement, transaction_id: Optional[int]) -> Tuple[PrepareResult, Tuple[List[Row], List[str]]]:
+    def _execute_select(self, statement: SelectStatement, transaction_id: Optional[int]) -> Tuple[PrepareResult, List[Dict[str, Any]]]:
         """执行SELECT语句。
         
         Args:
@@ -951,11 +951,11 @@ class SQLExecutor:
             transaction_id: 事务ID
             
         Returns:
-            执行结果和(行列表, 列名列表)的元组
+            执行结果和字典列表（包含别名映射）
         """
         table_name = statement.table_name
         if table_name not in self.database.tables:
-            return PrepareResult(4), ([], [])  # TABLE_NOT_FOUND = 4, 返回空列表
+            return PrepareResult(4), []  # TABLE_NOT_FOUND = 4, 返回空列表
         
         table = self.database.tables[table_name]
         
@@ -965,13 +965,27 @@ class SQLExecutor:
         else:
             rows = table.select_all()
         
-        # 确定要返回的列
-        if statement.columns == ['*']:
-            columns = list(table.schema.columns.keys())
-        else:
-            columns = statement.columns
+        # 将行转换为字典格式，包含选定的列和别名
+        dict_rows = []
         
-        return PrepareResult(0), (rows, columns)  # SUCCESS = 0
+        for row in rows:
+            row_dict = {}
+            # 如果列是['*']，选择所有列
+            if statement.columns == ['*']:
+                # 使用表结构获取所有列名
+                for col_name in table.schema.columns.keys():
+                    value = getattr(row, col_name, None)
+                    row_dict[col_name] = value
+            else:
+                for col_expr in statement.columns:
+                    # 检查此列是否有别名
+                    alias = statement.alias_mapping.get(col_expr, col_expr)
+                    value = getattr(row, col_expr, None)
+                    row_dict[alias] = value
+            
+            dict_rows.append(row_dict)
+        
+        return PrepareResult(0), dict_rows  # SUCCESS = 0
     
     def _execute_update(self, statement: UpdateStatement, transaction_id: Optional[int]) -> Tuple[PrepareResult, int]:
         """执行UPDATE语句。

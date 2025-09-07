@@ -106,14 +106,19 @@ class EnhancedREPL:
         self.current_transaction: Optional[int] = None
         self.input_buffer = EnhancedInputBuffer()
         
-    def _initialize_database(self, database_file: str):
-        """初始化新的数据库连接。
+    def _initialize_database(self, database_file: str) -> None:
+        """初始化数据库连接。
         
         Args:
             database_file: 数据库文件路径
         """
         try:
-            self.current_database = EnhancedDatabase(database_file)
+            # 确保文件路径是绝对路径，以保证日志文件在正确的目录中创建
+            if database_file != ":memory:":
+                abs_database_file = os.path.abspath(database_file)
+            else:
+                abs_database_file = database_file
+            self.current_database = EnhancedDatabase(abs_database_file)
             self.databases[self.current_database_name] = self.current_database
             self.executor = SQLExecutor(self.current_database)
             self.transaction_manager = self.current_database.transaction_manager
@@ -156,7 +161,9 @@ class EnhancedREPL:
             
             if os.path.exists(db_path):
                 try:
-                    new_db = EnhancedDatabase(db_path)
+                    # 确保文件路径是绝对路径，以保证日志文件在正确的目录中创建
+                    abs_db_path = os.path.abspath(db_path)
+                    new_db = EnhancedDatabase(abs_db_path)
                     self.databases[database_name] = new_db
                     
                     # 切换前关闭当前事务
@@ -293,7 +300,16 @@ class EnhancedREPL:
                     raise e
             
             if result == PrepareResult.SUCCESS:
-                if isinstance(data, tuple) and len(data) == 2:
+                # 检查是否是SELECT结果（字典列表格式）
+                if isinstance(data, list) and data and isinstance(data[0], dict):
+                    # SELECT结果是字典列表（包含别名信息）
+                    if data:
+                        # 从字典键中提取列名
+                        columns = list(data[0].keys()) if data else []
+                        self.print_select_results_with_columns(data, columns)
+                    else:
+                        print("(0 行)")
+                elif isinstance(data, tuple) and len(data) == 2:
                     # SELECT结果包含列信息
                     rows, columns = data
                     if rows:
