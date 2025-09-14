@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 
 # 添加项目根目录到Python路径
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -95,10 +96,15 @@ class Pysqlit_API:
         re = self.db.select(tablename,condition)
         if re:
             print('查询成功')
+            results = []
             for i in re:
-                print(i)
+                # 将字典转换为JSON格式并添加到结果列表中
+                json_result = json.dumps(i, ensure_ascii=False)
+                results.append(json_result)
+            return results
         else:
             print('查询失败')
+            return []
         pass
     
 
@@ -126,8 +132,20 @@ class Pysqlit_API:
         re = self.db.execute_sql(sql)
         if re:
             print('执行成功')
+            # 如果是查询语句，返回结果
+            if sql.strip().upper().startswith('SELECT'):
+                results = []
+                for i in re:
+                    # 将字典转换为JSON格式并添加到结果列表中
+                    json_result = json.dumps(i, ensure_ascii=False)
+                    results.append(json_result)
+                return results
+            else:
+                # 对于非查询语句，返回影响的行数
+                return re
         else:
             print('执行失败')
+            return None
         pass
 
 
