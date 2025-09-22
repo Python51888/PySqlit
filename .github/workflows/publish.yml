@@ -1,0 +1,38 @@
+name: Publish Python Package
+
+on:
+  release:
+    types: [published]  # 创建GitHub Release时触发
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest  # Windows环境
+    permissions:
+      id-token: write  # 必需：用于PyPI可信发布者验证
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4  
+      with:
+        fetch-depth: 0  # 获取完整提交历史（版本管理需要）
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6  
+      with:
+        version: "0.7.2"
+
+    - name: Set up Python
+      run: |
+        uv python install 3.11  # 安装指定Python版本
+
+    - name: Build package
+      run: |
+        uv build
+        ls dist
+
+    - name: Publish to PyPI  
+      run: uv publish  
+      
+    - name: Bump version
+      if: github.event_name == 'release'  
+      run: uv version ${{ github.event.release.tag_name }}          
