@@ -21,17 +21,10 @@ dependencies = [
     "pytest-cov>=4.0",  
 ]
 classifiers = [  
-    # 开发状态
-    Development Status :: 5 - Production/Stable",  
-    # Python支持   
-    "Programming Language :: Python :: 3.9",  
-    "Programming Language :: Python :: 3.10",  
+    Development Status :: 5 - Production/Stable",         
     "Programming Language :: Python :: 3.11",  
-    # 许可证
-    "License :: OSI Approved :: MIT License",
-    # 操作系统
+    "License :: OSI Approved :: MIT License",  
     "Operating System :: Microsoft :: Windows",  
-    # 项目类型
     "Intended Audience :: Developers",  
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",  
@@ -39,7 +32,7 @@ classifiers = [ 
 [project.urls]
 Homepage = "https://github.com/Python51888/PySqlit"      
 Documentation = "https://zread.ai/Python51888/PySqlit"  
-Repository = "https://github.com/Python51888/PySqlit"
+Repository = "https://github.com/Python51888/PySqlit"  
 
 [tool.uv.version]
 source = "file"
@@ -47,4 +40,4 @@ path = [
     "PySqlit/pysqlit/__init__.py",  
     "PySqlit/__version__.py"         
 ]
-pattern = "__version__ = \"{version}\""                                           
+pattern = "__version__ = \"{version}\""                                             
