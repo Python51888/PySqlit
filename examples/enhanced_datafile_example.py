@@ -4,9 +4,14 @@
 """
 
 import os
+import sys
 import json
 import csv
 import xml.etree.ElementTree as ET
+
+# 添加项目src目录到Python路径，确保可以正确导入pysqlit模块
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 from pysqlit.enhanced_datafile import EnhancedDataFile
 from pysqlit.exceptions import DatabaseError
 
