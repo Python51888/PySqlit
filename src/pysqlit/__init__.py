@@ -1,4 +1,4 @@
-"""PySQLit - 一个具有ACID兼容性的Python SQLite实现。"""
+"""PySQLit - Python版SQLite"""  
 
 from .version import __version__
 
