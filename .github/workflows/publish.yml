@@ -1,4 +1,4 @@
-name: Publish Python pk
+name: Publish Python Package
 
 on:
   release:
@@ -11,43 +11,40 @@ jobs:
       id-token: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v6
-      with:
-        version: "0.7.2"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.2"
 
-    - name: Set up Python
-      run: |
-        uv python install 3.11
+      - name: Set up Python
+        run: |
+          uv python install 3.11
 
-    - name: Extract version from tag
-      run: |
-        # 从标签中提取版本号（去除可能的 'v' 前缀）
-        $tag = "${{ github.event.release.tag_name }}"
-        # 如果标签以 'v' 开头，则去除它
-        if ($tag.StartsWith('v')) {
-          $version = $tag.Substring(1)
-        } else {
-          $version = $tag
-        }
-        echo "version=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Extract version from tag
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          if ($tag.StartsWith('v')) {
+            $version = $tag.Substring(1)
+          } else {
+            $version = $tag
+          }
+          echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-    - name: Set package version
-      run: |
-        # 使用 uv 设置版本号
-        uv version $env:VERSION
+      - name: Set package version
+        run: |
+          uv version set $env:VERSION
 
-    - name: Build package
-      run: |
-        uv build
-        Get-ChildItem dist
+      - name: Build package
+        run: |
+          uv build
+          Get-ChildItem dist
 
-    - name: Publish to PyPI
-      run: uv publish
-      env:
-        UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish to PyPI
+        run: uv publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
