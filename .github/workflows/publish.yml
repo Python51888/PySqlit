@@ -1,20 +1,20 @@
-name: Publish Python Package
+name: Publish Python pk
 
 on:
   release:
-    types: [published]  # 创建GitHub Release时触发
+    types: [published]
 
 jobs:
   build-and-publish:
-    runs-on: windows-latest  # Windows环境
+    runs-on: windows-latest
     permissions:
-      id-token: write  # 必需：用于PyPI可信发布者验证
+      id-token: write
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # 获取完整提交历史（版本管理需要）
+        fetch-depth: 0
 
     - name: Install uv
       uses: astral-sh/setup-uv@v6
@@ -23,16 +23,31 @@ jobs:
 
     - name: Set up Python
       run: |
-        uv python install 3.11  # 安装指定Python版本
+        uv python install 3.11
+
+    - name: Extract version from tag
+      run: |
+        # 从标签中提取版本号（去除可能的 'v' 前缀）
+        $tag = "${{ github.event.release.tag_name }}"
+        # 如果标签以 'v' 开头，则去除它
+        if ($tag.StartsWith('v')) {
+          $version = $tag.Substring(1)
+        } else {
+          $version = $tag
+        }
+        echo "version=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+    - name: Set package version
+      run: |
+        # 使用 uv 设置版本号
+        uv version $env:VERSION
 
     - name: Build package
       run: |
         uv build
-        ls dist
+        Get-ChildItem dist
 
     - name: Publish to PyPI
       run: uv publish
-      
-    - name: Bump version
-      if: github.event_name == 'release'
-      run: uv version ${{ github.event.release.tag_name }}
+      env:
+        UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
