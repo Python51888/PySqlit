@@ -3,6 +3,10 @@
 
 import sys
 import os
+
+# 添加src目录到Python路径，确保可以正确导入pysqlit模块
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+
 from pysqlit.repl import EnhancedREPL
 from pysqlit.art import pr_art
 
@@ -26,7 +30,7 @@ def main():
         # 创建空数据库文件
         open(database_file, 'w').close()
         print(f"已创建数据库: {db_name}")
-
+        print('')
 
     pr_art()
     repl = EnhancedREPL(database_file)

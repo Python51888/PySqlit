@@ -1,6 +1,7 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+# 添加项目src目录到Python路径，确保可以正确导入pysqlit模块
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from pysqlit.repl import EnhancedREPL
 

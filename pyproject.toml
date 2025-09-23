@@ -1,16 +1,43 @@
+[build-system]
+requires = ["uv-build>=0.7.2"]
+build-backend = "uv_build"
+
 [project]
-name = "pysqlit"
-version = "0.2.2"
-description = "Python版sqlite"
+name = "PySqlit"
+version = "0.2.5"
+description = "Python版sqlite引擎"
+authors = [
+    {name = "Python51888"},
+]
 readme = "README.md"
 requires-python = ">=3.11"
+license = {text = "MIT"}
+keywords = ["pysqlite", "sqlite", "sqlite3", "pysqlit", "PySqlit", "PySqlite"]
 dependencies = [
     "black>=22.0",
-    "fastmcp>=2.12.2",
     "mypy>=1.0",
     "pytest>=7.0",
-    "pytest-cov>=4.0",
-]
+    "pytest-cov>=4.0"
+    ]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed"
+    ]
 
-[tool.setuptools.packages.find]
-include = ["pysqlit*"]
+[project.urls]
+Homepage = "https://github.com/Python51888/PySqlit"
+Documentation = "https://zread.ai/Python51888/PySqlit"
+Repository = "https://github.com/Python51888/PySqlit"
+
+[tool.uv]
+dev-dependencies = [
+    "black>=22.0",
+    "mypy>=1.0",
+    "pytest>=7.0",
+    "pytest-cov>=4.0"
+    ]
