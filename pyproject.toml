@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "PySqlit"
-version = "0.2.6.3"    
+version = "0.2.6.3"
 description = "Python版sqlite引擎"
 authors = [
     {name = "Python51888"},
@@ -22,7 +22,7 @@ dependencies = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: MIT License",  
     "Operating System :: Microsoft :: Windows",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Python Modules",
@@ -30,7 +30,7 @@ classifiers = [
     ]
 
 [project.urls]
-Homepage = "https://github.com/Python51888/PySqlit"  
+Homepage = "https://github.com/Python51888/PySqlit"
 Documentation = "https://zread.ai/Python51888/PySqlit"
 Repository = "https://github.com/Python51888/PySqlit"
 
