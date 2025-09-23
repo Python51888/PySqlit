@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "PySqlit"
-version = "0.2.6.2"  
+version = "0.2.6.3"    
 description = "Python版sqlite引擎"
 authors = [
     {name = "Python51888"},
