@@ -2,7 +2,7 @@
 
 ### 安装
 ```
-pip install pysqlit
+uv pip install pysqlit    
 ```
 ### 快速入门
 ```
